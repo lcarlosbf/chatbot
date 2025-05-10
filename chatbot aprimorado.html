@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Chatbot with Fuzzy Matching</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+        }
+        .message-animation {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .language-toggle {
+            transition: all 0.3s ease;
+        }
+        .language-toggle.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .admin-panel {
+            transition: all 0.3s ease;
+            max-height: 0;
+            overflow: hidden;
+        }
+        .admin-panel.open {
+            max-height: 1000px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto max-w-4xl p-4">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-6">
+            <h1 class="text-3xl font-bold text-blue-600">SmartBot</h1>
+            <div class="flex space-x-2">
+                <button id="toggle-admin" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition">
+                    <i class="fas fa-cog mr-2"></i>Admin Panel
+                </button>
+                <div class="flex bg-gray-200 rounded-lg p-1">
+                    <button id="lang-en" class="language-toggle px-3 py-1 rounded-lg active">EN</button>
+                    <button id="lang-pt" class="language-toggle px-3 py-1 rounded-lg">PT</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Chat Interface -->
+        <div class="bg-white rounded-xl shadow-lg overflow-hidden">
+            <!-- Chat Messages -->
+            <div id="chat-messages" class="chat-container p-4 overflow-y-auto space-y-4">
+                <div class="message-animation flex justify-start">
+                    <div class="bg-blue-100 rounded-lg p-3 max-w-xs md:max-w-md">
+                        <p class="text-blue-800" data-en="Hello! I'm a smart chatbot that understands variations of questions. Try asking me anything!" data-pt="Olá! Sou um chatbot inteligente que entende variações de perguntas. Pergunte-me qualquer coisa!">Hello! I'm a smart chatbot that understands variations of questions. Try asking me anything!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="border-t p-4 bg-gray-50">
+                <div class="flex space-x-2">
+                    <input id="user-input" type="text" placeholder="Type your message..." 
+                        class="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        data-en-placeholder="Type your message..." 
+                        data-pt-placeholder="Digite sua mensagem...">
+                    <button id="send-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="mt-2 text-sm text-gray-500 text-center" data-en="Try: 'What languages can you understand?'" data-pt="Tente: 'Quais idiomas você compreende?'">
+                    Try: 'What languages can you understand?'
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Panel -->
+        <div id="admin-panel" class="admin-panel mt-6 bg-white rounded-xl shadow-lg overflow-hidden">
+            <div class="p-6">
+                <h2 class="text-2xl font-bold mb-4" data-en="Admin Panel" data-pt="Painel Admin">Admin Panel</h2>
+                
+                <!-- Add New QA -->
+                <div class="mb-8 p-4 border rounded-lg bg-gray-50">
+                    <h3 class="text-lg font-semibold mb-3" data-en="Add New Question & Answer" data-pt="Adicionar Nova Pergunta e Resposta">Add New Question & Answer</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-sm font-medium mb-1" data-en="Question (English)" data-pt="Pergunta (Inglês)">Question (English)</label>
+                            <input id="new-question-en" type="text" class="w-full px-3 py-2 border rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" data-en="Question (Portuguese)" data-pt="Pergunta (Português)">Question (Portuguese)</label>
+                            <input id="new-question-pt" type="text" class="w-full px-3 py-2 border rounded">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1" data-en="Answer (English)" data-pt="Resposta (Inglês)">Answer (English)</label>
+                            <textarea id="new-answer-en" class="w-full px-3 py-2 border rounded"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1" data-en="Answer (Portuguese)" data-pt="Resposta (Português)">Answer (Portuguese)</label>
+                            <textarea id="new-answer-pt" class="w-full px-3 py-2 border rounded"></textarea>
+                        </div>
+                    </div>
+                    <button id="add-qa-btn" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700" data-en="Add QA Pair" data-pt="Adicionar Par QA">
+                        Add QA Pair
+                    </button>
+                </div>
+
+                <!-- Existing QAs -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-3" data-en="Manage Existing Questions" data-pt="Gerenciar Perguntas Existentes">Manage Existing Questions</h3>
+                    <div id="qa-list" class="space-y-4">
+                        <!-- QA items will be added here dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Current language (default: English)
+        let currentLanguage = 'en';
+        let adminPanelOpen = false;
+        let fuseEn, fusePt; // Fuse.js instances for each language
+
+        // Question-answer pairs with variations
+        let qaPairs = [
+            {
+                id: 1,
+                question_en: "What is your name?",
+                variations_en: ["who are you", "your name", "identify yourself", "what should I call you"],
+                question_pt: "Qual é o seu nome?",
+                variations_pt: ["quem é você", "seu nome", "identifique-se", "como devo te chamar"],
+                answer_en: "I am a multilingual chatbot.",
+                answer_pt: "Eu sou um chatbot multilíngue."
+            },
+            {
+                id: 2,
+                question_en: "Which languages do you speak?",
+                variations_en: ["what languages can you understand", "do you speak other languages", 
+                               "what tongues do you know", "linguistic capabilities"],
+                question_pt: "Quais idiomas você fala?",
+                variations_pt: ["quais idiomas você compreende", "você fala outros idiomas",
+                               "que línguas você conhece", "capacidades linguísticas"],
+                answer_en: "I understand Portuguese, English, Spanish, and French.",
+                answer_pt: "Eu entendo português, inglês, espanhol e francês."
+            },
+            {
+                id: 3,
+                question_en: "How are you?",
+                variations_en: ["how's it going", "how do you feel", "what's up", "how are things"],
+                question_pt: "Como você está?",
+                variations_pt: ["tudo bem", "como vai", "e aí", "como estão as coisas"],
+                answer_en: "I'm just a bot, but I'm functioning perfectly! How about you?",
+                answer_pt: "Sou apenas um bot, mas estou funcionando perfeitamente! E você?"
+            },
+            {
+                id: 4,
+                question_en: "What is your contact number and email?",
+                variations_en: ["how can I reach you", "contact details", "phone and email", 
+                               "where can I message you", "contact information"],
+                question_pt: "Qual é seu número de contato e e-mail?",
+                variations_pt: ["como posso te contatar", "detalhes de contato", "telefone e e-mail",
+                               "onde posso te enviar mensagem", "informações de contato"],
+                answer_en: "You can reach us at: Phone: +1 (555) 123-4567, Email: contact@company.com",
+                answer_pt: "Você pode nos contatar em: Telefone: +55 (11) 98765-4321, Email: contato@empresa.com"
+            },
+            {
+                id: 5,
+                question_en: "What are your business hours?",
+                variations_en: ["when are you open", "opening times", "working hours", 
+                               "when do you operate", "hours of operation"],
+                question_pt: "Quais são seus horários de funcionamento?",
+                variations_pt: ["quando você está aberto", "horário de abertura", "horas de trabalho",
+                               "quando você opera", "horário de funcionamento"],
+                answer_en: "We're open Monday to Friday, 9:00 AM to 5:00 PM.",
+                answer_pt: "Estamos abertos de segunda a sexta, das 9:00 às 17:00."
+            },
+            {
+                id: 6,
+                question_en: "What is your company address?",
+                variations_en: ["where are you located", "physical location", "office address", 
+                               "where can I find you", "your location"],
+                question_pt: "Qual é o endereço da sua empresa?",
+                variations_pt: ["onde você está localizado", "localização física", "endereço do escritório",
+                               "onde posso te encontrar", "sua localização"],
+                answer_en: "Our headquarters is at 123 Business Ave, Suite 100, New York, NY 10001.",
+                answer_pt: "Nossa sede fica na Avenida Comercial, 123, Sala 100, São Paulo, SP 01000-000."
+            }
+        ];
+
+        // Initialize Fuse.js instances
+        function initializeFuse() {
+            // Prepare data for Fuse.js
+            const enQuestions = qaPairs.map(qa => ({
+                id: qa.id,
+                text: qa.question_en,
+                variations: qa.variations_en || []
+            }));
+            
+            const ptQuestions = qaPairs.map(qa => ({
+                id: qa.id,
+                text: qa.question_pt,
+                variations: qa.variations_pt || []
+            }));
+            
+            // Configure Fuse.js options
+            const options = {
+                includeScore: true,
+                threshold: 0.4, // Lower threshold means more strict matching
+                keys: ['text', 'variations'],
+                shouldSort: true,
+                findAllMatches: true,
+                ignoreLocation: true,
+                minMatchCharLength: 3
+            };
+            
+            // Create Fuse instances
+            fuseEn = new Fuse(enQuestions, options);
+            fusePt = new Fuse(ptQuestions, options);
+        }
+
+        // Normalize text for comparison
+        function normalizeText(text) {
+            return text
+                .toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents
+                .replace(/[^\w\s]/g, '') // Remove punctuation
+                .trim();
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize fuzzy search
+            initializeFuse();
+            
+            // Set up event listeners
+            document.getElementById('send-btn').addEventListener('click', sendMessage);
+            document.getElementById('user-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') sendMessage();
+            });
+            
+            document.getElementById('lang-en').addEventListener('click', () => setLanguage('en'));
+            document.getElementById('lang-pt').addEventListener('click', () => setLanguage('pt'));
+            
+            document.getElementById('toggle-admin').addEventListener('click', toggleAdminPanel);
+            document.getElementById('add-qa-btn').addEventListener('click', addNewQA);
+            
+            // Render initial QA list for admin
+            renderQAList();
+            
+            // Set initial language
+            setLanguage('en');
+        });
+
+        // Send a message to the chatbot
+        function sendMessage() {
+            const input = document.getElementById('user-input');
+            const message = input.value.trim();
+            
+            if (message === '') return;
+            
+            // Add user message to chat
+            addMessageToChat(message, 'user');
+            input.value = '';
+            
+            // Get bot response
+            const response = getBotResponse(message);
+            
+            // Add bot response to chat after a short delay
+            setTimeout(() => {
+                addMessageToChat(response, 'bot');
+            }, 500);
+        }
+
+        // Add a message to the chat UI
+        function addMessageToChat(message, sender) {
+            const chatMessages = document.getElementById('chat-messages');
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message-animation flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = sender === 'user' 
+                ? 'bg-blue-600 text-white rounded-lg p-3 max-w-xs md:max-w-md' 
+                : 'bg-blue-100 text-blue-800 rounded-lg p-3 max-w-xs md:max-w-md';
+            
+            const messageText = document.createElement('p');
+            messageText.textContent = message;
+            
+            bubbleDiv.appendChild(messageText);
+            messageDiv.appendChild(bubbleDiv);
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Get bot response using fuzzy matching
+        function getBotResponse(message) {
+            const normalizedInput = normalizeText(message);
+            
+            // Use Fuse.js to find the best match
+            const fuse = currentLanguage === 'en' ? fuseEn : fusePt;
+            const results = fuse.search(normalizedInput);
+            
+            // If we have a good match (score < 0.4), return the corresponding answer
+            if (results.length > 0 && results[0].score < 0.4) {
+                const bestMatchId = results[0].item.id;
+                const matchedQA = qaPairs.find(qa => qa.id === bestMatchId);
+                return matchedQA[`answer_${currentLanguage}`];
+            }
+            
+            // No good match found
+            return currentLanguage === 'en' 
+                ? "Sorry, I didn't understand. Can you rephrase?" 
+                : "Desculpe, não entendi. Você pode reformular?";
+        }
+
+        // Set the current language and update UI
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            
+            // Update language toggle buttons
+            document.getElementById('lang-en').classList.toggle('active', lang === 'en');
+            document.getElementById('lang-pt').classList.toggle('active', lang === 'pt');
+            
+            // Update all elements with language-specific data
+            document.querySelectorAll('[data-en], [data-pt]').forEach(el => {
+                const text = el.getAttribute(`data-${lang}`);
+                if (text) {
+                    if (el.tagName === 'INPUT' && el.hasAttribute(`data-${lang}-placeholder`)) {
+                        el.placeholder = el.getAttribute(`data-${lang}-placeholder`);
+                    } else {
+                        el.textContent = text;
+                    }
+                }
+            });
+        }
+
+        // Toggle admin panel visibility
+        function toggleAdminPanel() {
+            adminPanelOpen = !adminPanelOpen;
+            const panel = document.getElementById('admin-panel');
+            panel.classList.toggle('open');
+            
+            const button = document.getElementById('toggle-admin');
+            if (adminPanelOpen) {
+                button.innerHTML = '<i class="fas fa-times mr-2"></i>' + 
+                    (currentLanguage === 'en' ? 'Close Panel' : 'Fechar Painel');
+                button.classList.remove('bg-gray-200');
+                button.classList.add('bg-red-500', 'text-white');
+            } else {
+                button.innerHTML = '<i class="fas fa-cog mr-2"></i>' + 
+                    (currentLanguage === 'en' ? 'Admin Panel' : 'Painel Admin');
+                button.classList.remove('bg-red-500', 'text-white');
+                button.classList.add('bg-gray-200');
+            }
+        }
+
+        // Render QA list for admin
+        function renderQAList() {
+            const qaList = document.getElementById('qa-list');
+            qaList.innerHTML = '';
+            
+            if (qaPairs.length === 0) {
+                qaList.innerHTML = '<p class="text-gray-500">' + 
+                    (currentLanguage === 'en' ? 'No questions added yet.' : 'Nenhuma pergunta adicionada ainda.') + 
+                    '</p>';
+                return;
+            }
+            
+            qaPairs.forEach(qa => {
+                const qaItem = document.createElement('div');
+                qaItem.className = 'p-4 border rounded-lg bg-white shadow-sm';
+                qaItem.innerHTML = `
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${currentLanguage === 'en' ? 'Question (English)' : 'Pergunta (Inglês)'}</label>
+                            <input type="text" class="w-full px-3 py-2 border rounded question-en" value="${qa.question_en}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${currentLanguage === 'en' ? 'Question (Portuguese)' : 'Pergunta (Português)'}</label>
+                            <input type="text" class="w-full px-3 py-2 border rounded question-pt" value="${qa.question_pt}">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${currentLanguage === 'en' ? 'Variations (English)' : 'Variações (Inglês)'}</label>
+                            <input type="text" class="w-full px-3 py-2 border rounded variations-en" value="${qa.variations_en ? qa.variations_en.join(', ') : ''}" placeholder="Comma separated variations">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${currentLanguage === 'en' ? 'Variations (Portuguese)' : 'Variações (Português)'}</label>
+                            <input type="text" class="w-full px-3 py-2 border rounded variations-pt" value="${qa.variations_pt ? qa.variations_pt.join(', ') : ''}" placeholder="Variações separadas por vírgula">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${currentLanguage === 'en' ? 'Answer (English)' : 'Resposta (Inglês)'}</label>
+                            <textarea class="w-full px-3 py-2 border rounded answer-en">${qa.answer_en}</textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">${currentLanguage === 'en' ? 'Answer (Portuguese)' : 'Resposta (Português)'}</label>
+                            <textarea class="w-full px-3 py-2 border rounded answer-pt">${qa.answer_pt}</textarea>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button class="px-3 py-1 bg-blue-600 text-white rounded update-btn" data-id="${qa.id}">
+                            <i class="fas fa-save mr-1"></i>${currentLanguage === 'en' ? 'Update' : 'Atualizar'}
+                        </button>
+                        <button class="px-3 py-1 bg-red-600 text-white rounded delete-btn" data-id="${qa.id}">
+                            <i class="fas fa-trash mr-1"></i>${currentLanguage === 'en' ? 'Delete' : 'Excluir'}
+                        </button>
+                    </div>
+                `;
+                
+                qaList.appendChild(qaItem);
+            });
+            
+            // Add event listeners to new buttons
+            document.querySelectorAll('.update-btn').forEach(btn => {
+                btn.addEventListener('click', updateQA);
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', deleteQA);
+            });
+        }
+
+        // Add new QA pair
+        function addNewQA() {
+            const questionEn = document.getElementById('new-question-en').value.trim();
+            const questionPt = document.getElementById('new-question-pt').value.trim();
+            const variationsEn = document.getElementById('new-variations-en')?.value.trim().split(',').map(v => v.trim()).filter(v => v) || [];
+            const variationsPt = document.getElementById('new-variations-pt')?.value.trim().split(',').map(v => v.trim()).filter(v => v) || [];
+            const answerEn = document.getElementById('new-answer-en').value.trim();
+            const answerPt = document.getElementById('new-answer-pt').value.trim();
+            
+            if (!questionEn || !questionPt || !answerEn || !answerPt) {
+                alert(currentLanguage === 'en' 
+                    ? 'Please fill in all required fields.' 
+                    : 'Por favor, preencha todos os campos obrigatórios.');
+                return;
+            }
+            
+            // Generate new ID
+            const newId = qaPairs.length > 0 ? Math.max(...qaPairs.map(qa => qa.id)) + 1 : 1;
+            
+            // Add to our database
+            qaPairs.push({
+                id: newId,
+                question_en: questionEn,
+                question_pt: questionPt,
+                variations_en: variationsEn,
+                variations_pt: variationsPt,
+                answer_en: answerEn,
+                answer_pt: answerPt
+            });
+            
+            // Clear form
+            document.getElementById('new-question-en').value = '';
+            document.getElementById('new-question-pt').value = '';
+            document.getElementById('new-answer-en').value = '';
+            document.getElementById('new-answer-pt').value = '';
+            
+            // Reinitialize Fuse.js with new data
+            initializeFuse();
+            
+            // Refresh QA list
+            renderQAList();
+            
+            // Show success message
+            alert(currentLanguage === 'en' 
+                ? 'QA pair added successfully!' 
+                : 'Par QA adicionado com sucesso!');
+        }
+
+        // Update existing QA pair
+        function updateQA(e) {
+            const id = parseInt(e.target.getAttribute('data-id'));
+            const qaItem = e.target.closest('.p-4');
+            
+            const questionEn = qaItem.querySelector('.question-en').value.trim();
+            const questionPt = qaItem.querySelector('.question-pt').value.trim();
+            const variationsEn = qaItem.querySelector('.variations-en').value.split(',').map(v => v.trim()).filter(v => v);
+            const variationsPt = qaItem.querySelector('.variations-pt').value.split(',').map(v => v.trim()).filter(v => v);
+            const answerEn = qaItem.querySelector('.answer-en').value.trim();
+            const answerPt = qaItem.querySelector('.answer-pt').value.trim();
+            
+            if (!questionEn || !questionPt || !answerEn || !answerPt) {
+                alert(currentLanguage === 'en' 
+                    ? 'Please fill in all required fields.' 
+                    : 'Por favor, preencha todos os campos obrigatórios.');
+                return;
+            }
+            
+            // Update in our database
+            const index = qaPairs.findIndex(qa => qa.id === id);
+            if (index !== -1) {
+                qaPairs[index] = {
+                    id: id,
+                    question_en: questionEn,
+                    question_pt: questionPt,
+                    variations_en: variationsEn,
+                    variations_pt: variationsPt,
+                    answer_en: answerEn,
+                    answer_pt: answerPt
+                };
+                
+                // Reinitialize Fuse.js with updated data
+                initializeFuse();
+                
+                // Show success message
+                alert(currentLanguage === 'en' 
+                    ? 'QA pair updated successfully!' 
+                    : 'Par QA atualizado com sucesso!');
+            }
+        }
+
+        // Delete QA pair
+        function deleteQA(e) {
+            if (!confirm(currentLanguage === 'en' 
+                ? 'Are you sure you want to delete this QA pair?' 
+                : 'Tem certeza que deseja excluir este par QA?')) {
+                return;
+            }
+            
+            const id = parseInt(e.target.getAttribute('data-id'));
+            
+            // Remove from our database
+            qaPairs = qaPairs.filter(qa => qa.id !== id);
+            
+            // Reinitialize Fuse.js with updated data
+            initializeFuse();
+            
+            // Refresh QA list
+            renderQAList();
+            
+            // Show success message
+            alert(currentLanguage === 'en' 
+                ? 'QA pair deleted successfully!' 
+                : 'Par QA excluído com sucesso!');
+        }
+    </script>
+</body>
+</html>
